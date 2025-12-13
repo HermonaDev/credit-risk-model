@@ -1,0 +1,12 @@
+EDA INSIGHTS SUMMARY
+==================================================
+1. **High-Quality Transaction Data**: 95,662 transactions across 3,742 unique customers with ZERO missing values. All data in UGX currency (CountryCode 256).
+
+2. **Low Fraud Rate but High-Value Correlation**: Only 0.20% (193 transactions) are fraudulent, but fraud strongly correlates with transaction amount (r=0.56). High-value transactions warrant scrutiny.
+
+3. **Heavy Transaction Skew**: Amount distribution highly skewed (skew: 51.10). Mean transaction: UGX 6,718, Median: UGX 1,000. 25.5% of amounts are outliers, indicating high-value transactions.
+
+4. **Provider & Channel Concentration**: Top 2 providers (ID_4: 40%, ID_6: 36%) handle 76% of transactions. Channel_3 dominates (60% of transactions). Financial services (47%) and airtime (47%) are primary product categories.
+
+5. **Amount-Value Near-Perfect Correlation**: Amount and Value correlation = 0.99 (expected as Value = |Amount|). Consider dropping one to avoid multicollinearity. PricingStrategy shows moderate variation with 16.5% outliers.
+
