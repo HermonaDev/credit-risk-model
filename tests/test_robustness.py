@@ -1,23 +1,34 @@
 import sys
-sys.path.insert(0, 'src')
+sys.path.insert(0, "src")
+
 import pandas as pd
+import pytest
 from data_processing import load_data, create_customer_features
 
-# Test 1: Valid file
-print("Test 1: Loading valid data...")
-df = load_data('data/raw/data.csv')
-print(f"✓ Loaded {len(df)} rows")
 
-# Test 2: Create features
-print("\nTest 2: Creating customer features...")
-features = create_customer_features(df)
-print(f"✓ Created features for {len(features)} customers")
+def test_load_valid_data(tmp_path):
+    df_mock = pd.DataFrame({
+        "customer_id": [1, 2],
+        "amount": [100, 200]
+    })
 
-# Test 3: Empty dataframe (should fail)
-print("\nTest 3: Testing empty DataFrame handling...")
-try:
-    create_customer_features(pd.DataFrame())
-except ValueError as e:
-    print(f"✓ Correctly raised error: {e}")
+    file_path = tmp_path / "data.csv"
+    df_mock.to_csv(file_path, index=False)
 
-print("\n✅ All robustness tests completed!")
+    df = load_data(file_path)
+    assert len(df) == 2
+
+
+def test_create_customer_features():
+    df = pd.DataFrame({
+        "customer_id": [1, 1, 2],
+        "amount": [100, 50, 200]
+    })
+
+    features = create_customer_features(df)
+    assert len(features) == 2
+
+
+def test_empty_dataframe_raises_error():
+    with pytest.raises(ValueError):
+        create_customer_features(pd.DataFrame())

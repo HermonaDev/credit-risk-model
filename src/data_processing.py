@@ -1,4 +1,5 @@
 """Data processing module for credit risk model."""
+
 import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
@@ -28,20 +29,22 @@ def load_data(filepath: str) -> pd.DataFrame:
         If required columns are missing or date parsing fails.
     """
     import os
+
     if not os.path.exists(filepath):
-        raise FileNotFoundError(f"Data file not found at: {filepath}")
+        msg = f"Data file not found at: {filepath}"
+        raise FileNotFoundError(msg)
 
     df = pd.read_csv(filepath)
 
     # Validate required columns
-    required_columns = ['CustomerId', 'Amount', 'TransactionStartTime']
+    required_columns = ["CustomerId", "Amount", "TransactionStartTime"]
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         raise ValueError(f"Missing required columns: {missing_columns}")
 
     # Convert date column
     try:
-        df['TransactionStartTime'] = pd.to_datetime(df['TransactionStartTime'])
+        df["TransactionStartTime"] = pd.to_datetime(df["TransactionStartTime"])
     except Exception as e:
         raise ValueError(f"Failed to parse 'TransactionStartTime': {e}")
 
@@ -49,8 +52,7 @@ def load_data(filepath: str) -> pd.DataFrame:
 
 
 def create_customer_features(
-    df: pd.DataFrame, 
-    snapshot_date: pd.Timestamp = None
+    df: pd.DataFrame, snapshot_date: pd.Timestamp = None
 ) -> pd.DataFrame:
     """
     Aggregate transaction data to customer-level RFM features.
@@ -75,40 +77,43 @@ def create_customer_features(
     if df.empty:
         raise ValueError("Input DataFrame is empty")
 
-    required = ['CustomerId', 'Amount', 'TransactionStartTime']
+    required = ["CustomerId", "Amount", "TransactionStartTime"]
     missing = [col for col in required if col not in df.columns]
     if missing:
         raise ValueError(f"Input DataFrame missing columns: {missing}")
 
     if snapshot_date is None:
-        snapshot_date = df['TransactionStartTime'].max()
+        snapshot_date = df["TransactionStartTime"].max()
 
     # Monetary features
-    monetary = df.groupby('CustomerId')['Amount'].agg(
-        total_amount='sum',
-        avg_amount='mean',
-        std_amount='std',
-        transaction_count='count'
-    ).reset_index()
-
-    # Frequency
-    frequency = df.groupby('CustomerId').size().reset_index(name='frequency')
-
-    # Recency
-    last_transaction = df.groupby('CustomerId')['TransactionStartTime'].max().reset_index()
-    last_transaction['recency'] = (
-        snapshot_date - last_transaction['TransactionStartTime']
-    ).dt.days
-
-    # Merge features
-    customer_features = monetary.merge(frequency, on='CustomerId')
-    customer_features = customer_features.merge(
-        last_transaction[['CustomerId', 'recency']], 
-        on='CustomerId'
+    monetary = (
+        df.groupby("CustomerId")["Amount"]
+        .agg(
+            total_amount="sum",
+            avg_amount="mean",
+            std_amount="std",
+            transaction_count="count",
+        )
+        .reset_index()
     )
 
+    # Frequency
+    frequency = df.groupby("CustomerId").size().reset_index(name="frequency")
+
+    # Recency
+    last_transaction = (
+        df.groupby("CustomerId")["TransactionStartTime"].max().reset_index()
+    )
+    time_diff = snapshot_date - last_transaction["TransactionStartTime"]
+    last_transaction["recency"] = time_diff.dt.days
+
+    # Merge features
+    customer_features = monetary.merge(frequency, on="CustomerId")
+    recency_df = last_transaction[["CustomerId", "recency"]]
+    customer_features = customer_features.merge(recency_df, on="CustomerId")
+
     # Handle single-transaction customers (std is NaN)
-    customer_features['std_amount'] = customer_features['std_amount'].fillna(0)
+    customer_features["std_amount"] = customer_features["std_amount"].fillna(0)
 
     return customer_features
 
@@ -132,25 +137,25 @@ def create_transaction_features(df: pd.DataFrame) -> pd.DataFrame:
     ValueError
         If 'TransactionStartTime' column is missing or not datetime.
     """
-    if 'TransactionStartTime' not in df.columns:
+    if "TransactionStartTime" not in df.columns:
         raise ValueError("DataFrame missing 'TransactionStartTime' column")
-    
-    if not pd.api.types.is_datetime64_any_dtype(df['TransactionStartTime']):
+
+    if not pd.api.types.is_datetime64_any_dtype(df["TransactionStartTime"]):
         raise ValueError("'TransactionStartTime' must be datetime type")
 
     df = df.copy()
 
     # Extract time components
-    df['transaction_hour'] = df['TransactionStartTime'].dt.hour
-    df['transaction_day'] = df['TransactionStartTime'].dt.day
-    df['transaction_month'] = df['TransactionStartTime'].dt.month
-    df['transaction_year'] = df['TransactionStartTime'].dt.year
-    df['transaction_dayofweek'] = df['TransactionStartTime'].dt.dayofweek
-    df['transaction_weekend'] = df['transaction_dayofweek'].isin([5, 6])
-    df['transaction_weekend'] = df['transaction_weekend'].astype(int)
+    df["transaction_hour"] = df["TransactionStartTime"].dt.hour
+    df["transaction_day"] = df["TransactionStartTime"].dt.day
+    df["transaction_month"] = df["TransactionStartTime"].dt.month
+    df["transaction_year"] = df["TransactionStartTime"].dt.year
+    df["transaction_dayofweek"] = df["TransactionStartTime"].dt.dayofweek
+    is_weekend = df["transaction_dayofweek"].isin([5, 6])
+    df["transaction_weekend"] = is_weekend.astype(int)
+    df["transaction_weekend"] = df["transaction_weekend"].astype(int)
 
     return df
-
 
 def get_feature_pipeline() -> ColumnTransformer:
     """
@@ -168,30 +173,38 @@ def get_feature_pipeline() -> ColumnTransformer:
     """
     # Define column groups
     numerical_features = [
-        'recency', 'frequency', 'total_amount',
-        'avg_amount', 'std_amount', 'transaction_count',
-        'transaction_hour', 'transaction_day'
+        "recency",
+        "frequency",
+        "total_amount",
+        "avg_amount",
+        "std_amount",
+        "transaction_count",
+        "transaction_hour",
+        "transaction_day",
     ]
 
-    categorical_features = ['ProductCategory', 'ChannelId', 'ProviderId']
+    categorical_features = ["ProductCategory", "ChannelId", "ProviderId"]
 
     # Numerical pipeline
-    numerical_pipeline = Pipeline([
-        ('imputer', SimpleImputer(strategy='median')),
-        ('scaler', StandardScaler())
-    ])
+    numerical_pipeline = Pipeline(
+        [("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]
+    )
 
     # Categorical pipeline
-    categorical_pipeline = Pipeline([
-        ('imputer', SimpleImputer(strategy='most_frequent')),
-        ('onehot', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
-    ])
+    categorical_pipeline = Pipeline(
+        [
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
+        ]
+    )
 
     # Column transformer
-    preprocessor = ColumnTransformer([
-        ('num', numerical_pipeline, numerical_features),
-        ('cat', categorical_pipeline, categorical_features)
-    ])
+    preprocessor = ColumnTransformer(
+        [
+            ("num", numerical_pipeline, numerical_features),
+            ("cat", categorical_pipeline, categorical_features),
+        ]
+    )
 
     return preprocessor
 
@@ -231,13 +244,14 @@ def prepare_training_data(raw_data_path: str) -> pd.DataFrame:
 if __name__ == "__main__":
     # Test full pipeline
     try:
-        features = prepare_training_data('data/raw/data.csv')
+        features = prepare_training_data("data/raw/data.csv")
         print(f"✅ Prepared features for {len(features)} customers")
         print(f"Feature columns: {list(features.columns)}")
 
         # Test pipeline creation
         pipeline = get_feature_pipeline()
         print(f"✅ Pipeline created with {len(pipeline.transformers)} transformers")
-        
+
     except Exception as e:
         print(f"❌ Error in pipeline: {e}")
+"" 
