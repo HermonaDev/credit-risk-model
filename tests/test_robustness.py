@@ -8,8 +8,12 @@ from data_processing import load_data, create_customer_features
 
 def test_load_valid_data(tmp_path):
     df_mock = pd.DataFrame({
-        "customer_id": [1, 2],
-        "amount": [100, 200]
+        "CustomerId": [1, 2],
+        "Amount": [100, 200],
+        "TransactionStartTime": pd.to_datetime([
+            "2024-01-01",
+            "2024-01-02"
+        ])
     })
 
     file_path = tmp_path / "data.csv"
@@ -21,8 +25,13 @@ def test_load_valid_data(tmp_path):
 
 def test_create_customer_features():
     df = pd.DataFrame({
-        "customer_id": [1, 1, 2],
-        "amount": [100, 50, 200]
+        "CustomerId": [1, 1, 2],
+        "Amount": [100, 50, 200],
+        "TransactionStartTime": pd.to_datetime([
+            "2024-01-01",
+            "2024-01-05",
+            "2024-01-03"
+        ])
     })
 
     features = create_customer_features(df)
