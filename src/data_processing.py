@@ -5,6 +5,9 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
 from sklearn.compose import ColumnTransformer
+from xverse.ensemble import VotingSelector
+from xverse.transformer import MonotonicBinning, WOE
+
 
 
 def load_data(filepath: str) -> pd.DataFrame:
@@ -240,6 +243,26 @@ def prepare_training_data(raw_data_path: str) -> pd.DataFrame:
 
     return customer_features
 
+def add_woe_features(df: pd.DataFrame, target_col: str = 'is_high_risk') -> pd.DataFrame:
+    """
+    Add Weight of Evidence features for credit scoring.
+    """
+    # Select features for WoE (example: bin numerical features first)
+    numerical_features = ['recency', 'frequency', 'monetary_total']
+    
+    # Create monotonic bins
+    binner = MonotonicBinning()
+    df_binned = binner.fit_transform(df[numerical_features], df[target_col])
+    
+    # Calculate WoE
+    woe_transformer = WOE()
+    woe_features = woe_transformer.fit_transform(df_binned, df[target_col])
+    
+    # Add to original dataframe
+    for col in woe_features.columns:
+        df[f'{col}_woe'] = woe_features[col]
+    
+    return df
 
 if __name__ == "__main__":
     # Test full pipeline

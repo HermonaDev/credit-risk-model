@@ -166,6 +166,15 @@ def predict_test():
             }
         }
 
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None,
+        "timestamp": datetime.datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+    
 @app.get("/model_info")
 def model_info():
     """Get information about the loaded model."""

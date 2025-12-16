@@ -6,13 +6,38 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Lint with flake8
+        run: |
+          pip install flake8
+          flake8 src --count --max-complexity=10 --statistics --max-line-length=100
+          
       - name: Test with pytest
         run: |
           pip install pytest
-          pytest tests/ -v
+          pytest tests/ -v --cov=src --cov-report=xml
+          
+      - name: Build Docker image
+        run: |
+          docker build -t credit-risk-model:ci-test .
+          
+      - name: Verify API health (optional)
+        run: |
+          # Start container in background
+          docker run -d -p 8000:8000 --name credit-risk-test credit-risk-model:ci-test
+          sleep 10
+          # Test health endpoint
+          curl -f http://localhost:8000/health || echo "Health check failed"
+          # Cleanup
+          docker stop credit-risk-test
+          docker rm credit-risk-test
