@@ -115,26 +115,69 @@ def create_proxy_target(rfm_df: pd.DataFrame, n_clusters: int = 3, random_state:
     return rfm_df[['CustomerId', 'is_high_risk']]
 
 def prepare_full_dataset(transaction_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Full pipeline: RFM features + proxy target.
-    
-    Returns
-    -------
-    pd.DataFrame
-        Combined features and target for modeling.
-    """
+    """Full pipeline: RFM features + metadata-based target."""
+    # Get RFM features for modeling
     rfm_features = create_rfm_features(transaction_df)
-    target = create_proxy_target(rfm_features)
     
-    # Merge features with target (drop duplicate column if exists)
+    # Get target from metadata (NOT from RFM clustering)
+    target = create_proxy_target_from_metadata(transaction_df)
+    
+    # Merge
     full_data = pd.merge(rfm_features, target, on='CustomerId', suffixes=('', '_drop'))
     
-    # Remove any columns ending with '_drop'
-    cols_to_drop = [col for col in full_data.columns if col.endswith('_drop')]
-    if cols_to_drop:
-        full_data = full_data.drop(columns=cols_to_drop)
+    # Clean up
+    drop_cols = [col for col in full_data.columns if col.endswith('_drop')]
+    if drop_cols:
+        full_data = full_data.drop(columns=drop_cols)
     
     return full_data
+
+def create_proxy_target_from_metadata(transaction_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Create proxy target using transaction metadata only (not RFM).
+    High-risk = customers with high fraud rate OR unusual patterns.
+    """
+    # Calculate fraud rate per customer
+    fraud_stats = (
+        transaction_df.groupby('CustomerId')['FraudResult']
+        .agg(fraud_count='sum', total_transactions='size')
+        .reset_index()
+    )
+    fraud_stats['fraud_rate'] = fraud_stats['fraud_count'] / fraud_stats['total_transactions']
+    
+    # Calculate transaction pattern features (not RFM)
+    pattern_features = (
+        transaction_df.groupby('CustomerId')
+        .agg(
+            unique_products=('ProductId', 'nunique'),
+            unique_channels=('ChannelId', 'nunique'),
+            avg_transaction_hour=('TransactionStartTime', lambda x: x.dt.hour.mean())
+        )
+        .reset_index()
+    )
+    
+    # Merge
+    customer_features = pd.merge(fraud_stats, pattern_features, on='CustomerId')
+    
+    # Create risk score (simple heuristic)
+    customer_features['risk_score'] = (
+        customer_features['fraud_rate'] * 10 +  # Weight fraud heavily
+        (1 / customer_features['unique_products']) +  # Few products = higher risk
+        (customer_features['avg_transaction_hour'].apply(
+            lambda x: abs(x - 12) / 12  # Unusual transaction times
+        ))
+    )
+    
+    # Binary target: top 30% risk score = high-risk
+    threshold = customer_features['risk_score'].quantile(0.7)
+    customer_features['is_high_risk'] = (
+        customer_features['risk_score'] >= threshold
+    ).astype(int)
+    
+    print(f"High-risk customers: {customer_features['is_high_risk'].sum()} "
+          f"({customer_features['is_high_risk'].mean()*100:.1f}%)")
+    
+    return customer_features[['CustomerId', 'is_high_risk']]
 
 if __name__ == "__main__":
     # Test the implementation
